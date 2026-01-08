@@ -1,0 +1,15 @@
+.connect-btn {
+    background: var(--primary-color);
+    color: var(--white);
+}
+.connect-btn:hover {
+    background: var(--primary-hover);
+}
+.disconnect-btn {
+    background: var(--error-color);
+    color: var(--white);
+}
+.status.listening {
+    background: var(--connected-bg);
+    color: var(--connected-color);
+}

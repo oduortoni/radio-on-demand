@@ -1,0 +1,20 @@
+.start-btn {
+    background: var(--success-color);
+    color: var(--white);
+}
+.start-btn:hover { background: var(--success-hover); }
+.stop-btn {
+    background: var(--error-color);
+    color: var(--white);
+}
+.stop-btn:hover { background: var(--error-hover); }
+.status.broadcasting {
+    background: var(--broadcasting-bg);
+    color: var(--broadcasting-color);
+}
+.clear-btn {
+    background: var(--gray-color);
+    color: var(--white);
+    padding: 8px 15px;
+    font-size: 12px;
+}

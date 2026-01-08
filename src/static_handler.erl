@@ -6,9 +6,11 @@ init(Req0, State) ->
     PrivDir = code:priv_dir(radio),
     
     FileName = case Path of
-        <<"/">> -> "broadcaster.html";
+        <<"/">> -> "index.html";
+        <<"/radio">> -> "listener.html";
+        <<"/broadcast">> -> "broadcaster.html";
         <<"/listener">> -> "listener.html";
-        _ -> "broadcaster.html"
+        _ -> "index.html"
     end,
     
     FilePath = filename:join(PrivDir, FileName),
