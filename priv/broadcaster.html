@@ -172,10 +172,10 @@
 
     <script>
         let ws = null;
-        let mediaRecorder = null;
         let audioContext = null;
         let analyser = null;
         let microphone = null;
+        let processor = null;
         let chunkCount = 0;
         let totalBytes = 0;
         let isRecording = false;
@@ -241,17 +241,6 @@
                     document.getElementById('wsStatus').textContent = 'Closed';
                     updateStatus('⚫ Disconnected', 'disconnected');
                 };
-
-                ws.onmessage = (event) => {
-                    log('← Received message from server', 'info');
-                    try {
-                        const data = JSON.parse(event.data);
-                        log(`  Message type: ${data.type}`, 'info');
-                        log(`  Data size: ${event.data.length} bytes`, 'info');
-                    } catch (e) {
-                        log('  Could not parse message', 'warning');
-                    }
-                };
             });
         }
 
@@ -269,78 +258,80 @@
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        sampleRate: 44100
+                        autoGainControl: false,
+                        sampleRate: 48000
                     }
                 });
                 log('✓ Microphone access granted', 'success');
 
-                // Setup audio context for visualization
+                // Setup audio context
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                microphone = audioContext.createMediaStreamSource(stream);
-                microphone.connect(analyser);
-                analyser.fftSize = 256;
-                
                 const sampleRate = audioContext.sampleRate;
                 document.getElementById('sampleRate').textContent = sampleRate + ' Hz';
                 log(`Audio context sample rate: ${sampleRate} Hz`, 'info');
 
-                // Start visualization
-                visualize();
-
-                // Setup MediaRecorder
-                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-                    ? 'audio/webm;codecs=opus' 
-                    : 'audio/webm';
+                // Setup analyser for visualization
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
                 
-                log(`Using MIME type: ${mimeType}`, 'info');
+                microphone = audioContext.createMediaStreamSource(stream);
                 
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: mimeType,
-                    audioBitsPerSecond: 128000
-                });
+                // Create script processor for raw audio data
+                const bufferSize = 4096;
+                processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+                
+                log(`Using buffer size: ${bufferSize} samples`, 'info');
+                log(`Chunk duration: ${(bufferSize / sampleRate * 1000).toFixed(2)}ms`, 'info');
 
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        chunkCount++;
-                        log(`→ Audio chunk #${chunkCount} captured`, 'info');
-                        log(`  Chunk size: ${event.data.size} bytes`, 'info');
+                processor.onaudioprocess = (e) => {
+                    if (!isRecording) return;
+
+                    const inputData = e.inputBuffer.getChannelData(0);
+                    
+                    // Convert Float32Array to Int16Array (PCM)
+                    const pcmData = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        const s = Math.max(-1, Math.min(1, inputData[i]));
+                        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                    }
+
+                    // Convert to base64
+                    const uint8Array = new Uint8Array(pcmData.buffer);
+                    const base64 = btoa(String.fromCharCode.apply(null, uint8Array));
+                    
+                    chunkCount++;
+                    totalBytes += base64.length;
+                    updateStats();
+
+                    const message = JSON.stringify({
+                        type: 'audio',
+                        audio: base64,
+                        sampleRate: sampleRate,
+                        channels: 1,
+                        format: 'pcm16'
+                    });
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(message);
                         
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const base64Audio = reader.result.split(',')[1];
-                            totalBytes += base64Audio.length;
-                            updateStats();
-                            
-                            const message = JSON.stringify({
-                                type: 'audio',
-                                audio: base64Audio
-                            });
-                            
-                            log(`  Base64 size: ${base64Audio.length} bytes`, 'info');
-                            log(`  JSON message size: ${message.length} bytes`, 'info');
-                            
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(message);
-                                log(`  ✓ Sent to server`, 'success');
-                            } else {
-                                log(`  ✗ WebSocket not ready (state: ${ws?.readyState})`, 'error');
-                            }
-                        };
-                        reader.readAsDataURL(event.data);
+                        if (chunkCount % 10 === 0) { // Log every 10 chunks
+                            log(`→ Sent chunk #${chunkCount} (${base64.length} bytes)`, 'success');
+                        }
                     }
                 };
 
-                mediaRecorder.onerror = (event) => {
-                    log('✗ MediaRecorder error: ' + event.error, 'error');
-                };
+                // Connect audio nodes
+                microphone.connect(analyser);
+                microphone.connect(processor);
+                processor.connect(audioContext.destination);
 
-                // Start recording with 1 second chunks
-                log('Starting MediaRecorder (1000ms chunks)...', 'info');
-                mediaRecorder.start(1000);
                 isRecording = true;
 
+                // Start visualization
+                visualize();
+
                 log('✓ Broadcasting started successfully', 'success');
+                log('  Sending raw PCM audio data', 'info');
                 updateStatus('🔴 Broadcasting', 'broadcasting');
                 startBtn.style.display = 'none';
                 stopBtn.style.display = 'inline-block';
@@ -357,9 +348,9 @@
             
             isRecording = false;
             
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                log('MediaRecorder stopped', 'info');
+            if (processor) {
+                processor.disconnect();
+                log('Processor disconnected', 'info');
             }
 
             if (microphone) {
@@ -416,8 +407,8 @@
         startBtn.addEventListener('click', startBroadcasting);
         stopBtn.addEventListener('click', stopBroadcasting);
 
-        // Initial log
         log('Page loaded - Ready to broadcast', 'info');
+        log('  Using raw PCM16 audio format', 'info');
     </script>
 </body>
 </html>

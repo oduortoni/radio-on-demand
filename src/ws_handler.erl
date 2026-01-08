@@ -17,24 +17,12 @@ websocket_init(State) ->
 websocket_handle({text, Msg}, State) ->
     io:format("~n[~s] → Received WebSocket message~n", [timestamp()]),
     io:format("  Message size: ~p bytes~n", [byte_size(Msg)]),
-    io:format("  First 100 chars: ~s~n", [string:slice(Msg, 0, 100)]),
     
     % Parse JSON message
     try jsone:decode(Msg, [{object_format, map}]) of
-        #{<<"type">> := <<"audio">>, <<"audio">> := Audio} = DecodedMsg ->
+        #{<<"type">> := <<"audio">>} = DecodedMsg ->
             io:format("  ✓ JSON parsed successfully~n", []),
             io:format("  Message type: audio~n", []),
-            io:format("  Audio data size: ~p bytes~n", [byte_size(Audio)]),
-            
-            % Check if it's base64 or what format
-            case Audio of
-                <<"data:", Rest/binary>> ->
-                    io:format("  Audio format: Data URI~n", []),
-                    io:format("  Data URI prefix: ~s~n", [string:slice(Rest, 0, 50)]);
-                _ ->
-                    io:format("  Audio format: Raw base64 or other~n", []),
-                    io:format("  First 50 chars: ~s~n", [string:slice(Audio, 0, 50)])
-            end,
             
             % Get all listeners except sender
             AllListeners = ets:tab2list(radio_listeners),
@@ -45,11 +33,11 @@ websocket_handle({text, Msg}, State) ->
             
             io:format("  Broadcasting to ~p other listener(s)~n", [length(OtherListeners)]),
             
-            % Broadcast to all listeners except sender
+            % Broadcast ENTIRE MESSAGE to all listeners except sender
             lists:foreach(
                 fun({ListenerPid}) ->
                     io:format("    → Sending to PID: ~p~n", [ListenerPid]),
-                    ListenerPid ! {audio, Audio}
+                    ListenerPid ! {audio, Msg}  % Send the ORIGINAL message, not just audio data
                 end,
                 OtherListeners
             ),
@@ -72,19 +60,13 @@ websocket_handle(Data, State) ->
     io:format("  Data: ~p~n~n", [Data]),
     {ok, State}.
 
-websocket_info({audio, AudioData}, State) ->
+websocket_info({audio, OriginalMsg}, State) ->
     io:format("~n[~s] ← Relaying audio to client~n", [timestamp()]),
-    io:format("  Audio data size: ~p bytes~n", [byte_size(AudioData)]),
-    
-    % Encode response
-    Response = jsone:encode(#{
-        <<"type">> => <<"audio">>,
-        <<"audio">> => AudioData
-    }),
-    
-    io:format("  Response size: ~p bytes~n", [byte_size(Response)]),
+    io:format("  Message size: ~p bytes~n", [byte_size(OriginalMsg)]),
     io:format("  ✓ Sending to client~n~n", []),
-    {reply, {text, Response}, State};
+    
+    % Send the ORIGINAL message as-is (it's already JSON with all metadata)
+    {reply, {text, OriginalMsg}, State};
 websocket_info(Info, State) ->
     io:format("~n[~s] ⚠ Received unknown info message~n", [timestamp()]),
     io:format("  Info: ~p~n~n", [Info]),
