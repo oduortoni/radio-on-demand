@@ -18,7 +18,7 @@ start() ->
             {"/", template_handler, []},
             {"/radio", template_handler, []},
             {"/broadcast", template_handler, []},
-            {"/listener", static_handler, []},
+            {"/listener", template_handler, []},
             {"/ws", ws_handler, []},
             {"/[...]", cowboy_static, {priv_dir, radio, ""}}
         ]}
