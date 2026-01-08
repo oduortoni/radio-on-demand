@@ -15,9 +15,9 @@ start() ->
             {"/favicon.ico", cowboy_static, {priv_file, radio, "favicon.ico"}},
             {"/[...].css", cowboy_static, {priv_dir, radio, ""}},
             {"/[...].js", cowboy_static, {priv_dir, radio, ""}},
-            {"/", static_handler, []},
-            {"/radio", static_handler, []},
-            {"/broadcast", static_handler, []},
+            {"/", template_handler, []},
+            {"/radio", template_handler, []},
+            {"/broadcast", template_handler, []},
             {"/listener", static_handler, []},
             {"/ws", ws_handler, []},
             {"/[...]", cowboy_static, {priv_dir, radio, ""}}

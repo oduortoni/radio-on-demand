@@ -160,8 +160,8 @@ async function startBroadcasting() {
         log('✓ Broadcasting started successfully', 'success');
         log('  Sending raw PCM audio data', 'info');
         updateStatus('🔴 Broadcasting', 'broadcasting');
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
+        startBtn.classList.add('hidden');
+        stopBtn.classList.remove('hidden');
 
     } catch (error) {
         log('✗ Error starting broadcast: ' + error.message, 'error');
@@ -197,8 +197,8 @@ function stopBroadcasting() {
 
     log('✓ Broadcasting stopped', 'success');
     updateStatus('⚫ Disconnected', 'disconnected');
-    stopBtn.style.display = 'none';
-    startBtn.style.display = 'inline-block';
+    stopBtn.classList.add('hidden');
+    startBtn.classList.remove('hidden');
     startBtn.disabled = false;
 }
 

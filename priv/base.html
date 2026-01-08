@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}}</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="styles.css">
+    {{EXTRA_CSS}}
+</head>
+<body>
+    <div class="container">
+        <h1>{{HEADING}}</h1>
+        
+        <div id="status" class="status disconnected">
+            ⚫ Disconnected
+        </div>
+
+        <div class="controls">
+            {{CONTROLS}}
+        </div>
+
+        <div class="debug-panel">
+            <h3>Debug Information</h3>
+            <div class="stats">
+                {{STATS}}
+            </div>
+
+            <canvas id="visualizer" class="visualizer"></canvas>
+
+            <div class="log-section">
+                <h4>Console Log <button class="clear-btn" onclick="clearLog()">Clear</button></h4>
+                <div id="debugLog" class="debug-log"></div>
+            </div>
+        </div>
+    </div>
+
+    {{SCRIPTS}}
+</body>
+</html>

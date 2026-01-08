@@ -141,3 +141,19 @@ button:disabled {
     border-radius: var(--border-radius);
     margin-top: 15px;
 }
+
+.controls {
+    margin: 20px 0;
+}
+
+.hidden {
+    display: none;
+}
+
+.log-section {
+    margin-top: 20px;
+}
+
+.log-section h4 {
+    margin: 0 0 10px 0;
+}

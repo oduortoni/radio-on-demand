@@ -85,8 +85,8 @@ async function connectListener() {
             log('✓ WebSocket connected successfully', 'success');
             document.getElementById('wsStatus').textContent = 'Connected';
             updateStatus('🟢 Listening', 'listening');
-            connectBtn.style.display = 'none';
-            disconnectBtn.style.display = 'inline-block';
+            connectBtn.classList.add('hidden');
+            disconnectBtn.classList.remove('hidden');
             isConnected = true;
             visualize();
         };
@@ -254,8 +254,8 @@ function disconnect() {
     }
 
     log('✓ Disconnected', 'success');
-    disconnectBtn.style.display = 'none';
-    connectBtn.style.display = 'inline-block';
+    disconnectBtn.classList.add('hidden');
+    connectBtn.classList.remove('hidden');
     connectBtn.disabled = false;
 }
 

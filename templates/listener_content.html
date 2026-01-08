@@ -1,0 +1,32 @@
+<h1>🎧 Radio Listener - Debug Mode</h1>
+<div id="status" class="status disconnected">⚫ Disconnected</div>
+<div class="controls">
+    <button id="connectBtn" class="connect-btn">Connect & Listen</button>
+    <button id="disconnectBtn" class="disconnect-btn hidden">Disconnect</button>
+</div>
+<div class="debug-panel">
+    <h3>Debug Information</h3>
+    <div class="stats">
+        <div class="stat-box">
+            <div class="stat-label">Chunks Received</div>
+            <div class="stat-value" id="chunksReceived">0</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Total Data Received</div>
+            <div class="stat-value" id="dataReceived">0 KB</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">WebSocket Status</div>
+            <div class="stat-value" id="wsStatus">Closed</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Latency</div>
+            <div class="stat-value" id="latency">-</div>
+        </div>
+    </div>
+    <canvas id="visualizer" class="visualizer"></canvas>
+    <div class="log-section">
+        <h4>Console Log <button class="clear-btn" onclick="clearLog()">Clear</button></h4>
+        <div id="debugLog" class="debug-log"></div>
+    </div>
+</div>
