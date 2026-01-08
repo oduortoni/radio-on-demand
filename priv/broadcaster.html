@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>nu-radio</title>
+</head>
+<body>
+    <h1>nu-radio</h1>
+    
+    <div>
+        <button id="startBtn">Start Broadcasting</button>
+        <button id="stopBtn" disabled>Stop Broadcasting</button>
+        <button id="listenBtn">Start Listening</button>
+    </div>
+    
+    <div>
+        <p>Status: <span id="status">Disconnected</span></p>
+        <p>Listeners: <span id="listeners">0</span></p>
+    </div>
+    
+    <audio id="audioPlayer" controls style="width: 100%;"></audio>
+
+    <script>
+        let ws;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isBroadcasting = false;
+        let isListening = false;
+
+        // WebSocket connection
+        function connect() {
+            ws = new WebSocket('ws://' + window.location.host + '/ws');
+            
+            ws.onopen = () => {
+                document.getElementById('status').textContent = 'Connected';
+                console.log('Connected to server');
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'listeners') {
+                    document.getElementById('listeners').textContent = data.count;
+                } else if (data.type === 'audio' && isListening) {
+                    // Convert base64 to audio blob and play
+                    const audioBlob = base64ToBlob(data.audio, 'audio/webm');
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    document.getElementById('audioPlayer').src = audioUrl;
+                }
+            };
+            
+            ws.onclose = () => {
+                document.getElementById('status').textContent = 'Disconnected';
+                setTimeout(connect, 2000);
+            };
+        }
+
+        // Start broadcasting
+        document.getElementById('startBtn').onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        channelCount: 1,      // Mono
+                        sampleRate: 24000,    // 24kHz
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+                
+                // Low quality for faster transmission
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus',
+                    audioBitsPerSecond: 24000  // 24kbps
+                });
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const base64 = reader.result.split(',')[1];
+                            ws.send(JSON.stringify({
+                                type: 'audio',
+                                audio: base64
+                            }));
+                        };
+                        reader.readAsDataURL(event.data);
+                    }
+                };
+                
+                // Send small chunks frequently
+                mediaRecorder.start(100);  // 100ms chunks
+                isBroadcasting = true;
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('status').textContent = 'Broadcasting';
+                
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                alert('Could not access microphone. Please check permissions.');
+            }
+        };
+
+        // Stop broadcasting
+        document.getElementById('stopBtn').onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+            isBroadcasting = false;
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('status').textContent = 'Connected (Idle)';
+        };
+
+        // Start listening
+        document.getElementById('listenBtn').onclick = () => {
+            isListening = !isListening;
+            document.getElementById('listenBtn').textContent = 
+                isListening ? 'Stop Listening' : 'Start Listening';
+            
+            if (isListening) {
+                document.getElementById('audioPlayer').play();
+            } else {
+                document.getElementById('audioPlayer').pause();
+            }
+        };
+
+        // Helper function
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        // Connect on load
+        connect();
+    </script>
+</body>
+</html>
