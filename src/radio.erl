@@ -13,6 +13,7 @@ start() ->
     Dispatch = cowboy_router:compile([
         {'_', [
             {"/", static_handler, []},
+            {"/listener", static_handler, []},
             {"/ws", ws_handler, []}
         ]}
     ]),

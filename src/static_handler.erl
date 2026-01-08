@@ -2,9 +2,16 @@
 -export([init/2]).
 
 init(Req0, State) ->
-    % Read file from priv directory
+    Path = cowboy_req:path(Req0),
     PrivDir = code:priv_dir(radio),
-    FilePath = filename:join(PrivDir, "broadcaster.html"),
+    
+    FileName = case Path of
+        <<"/">> -> "broadcaster.html";
+        <<"/listener">> -> "listener.html";
+        _ -> "broadcaster.html"
+    end,
+    
+    FilePath = filename:join(PrivDir, FileName),
     
     case file:read_file(FilePath) of
         {ok, Data} ->

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Listener - Debug Mode</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .connect-btn {
+            background: #2196F3;
+            color: white;
+        }
+        .connect-btn:hover { background: #1976D2; }
+        .disconnect-btn {
+            background: #f44336;
+            color: white;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .status.listening {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .debug-panel {
+            margin-top: 30px;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .debug-log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #444;
+            padding-left: 10px;
+        }
+        .log-success { border-color: #4CAF50; color: #4CAF50; }
+        .log-error { border-color: #f44336; color: #f44336; }
+        .log-warning { border-color: #ff9800; color: #ff9800; }
+        .log-info { border-color: #2196F3; color: #2196F3; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-box {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 5px;
+        }
+        .visualizer {
+            width: 100%;
+            height: 100px;
+            background: #1e1e1e;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎧 Radio Listener - Debug Mode</h1>
+        
+        <div id="status" class="status disconnected">
+            ⚫ Disconnected
+        </div>
+
+        <div>
+            <button id="connectBtn" class="connect-btn">Connect & Listen</button>
+            <button id="disconnectBtn" class="disconnect-btn" style="display:none;">Disconnect</button>
+        </div>
+
+        <div class="debug-panel">
+            <h3>Debug Information</h3>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">Chunks Received</div>
+                    <div class="stat-value" id="chunksReceived">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Data Received</div>
+                    <div class="stat-value" id="dataReceived">0 KB</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">WebSocket Status</div>
+                    <div class="stat-value" id="wsStatus">Closed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Audio Playing</div>
+                    <div class="stat-value" id="audioStatus">No</div>
+                </div>
+            </div>
+
+            <canvas id="visualizer" class="visualizer"></canvas>
+
+            <h4 style="margin-top: 20px;">
+                Console Log 
+                <button class="connect-btn" style="padding: 8px 15px; font-size: 12px;" onclick="clearLog()">Clear</button>
+            </h4>
+            <div id="debugLog" class="debug-log"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let mediaSource = null;
+        let sourceBuffer = null;
+        let audioContext = null;
+        let analyser = null;
+        let chunkCount = 0;
+        let totalBytes = 0;
+        let audioQueue = [];
+        let isPlaying = false;
+
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusDiv = document.getElementById('status');
+        const debugLog = document.getElementById('debugLog');
+
+        // Visualizer setup
+        const canvas = document.getElementById('visualizer');
+        const canvasCtx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            debugLog.appendChild(entry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function clearLog() {
+            debugLog.innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        function updateStats() {
+            document.getElementById('chunksReceived').textContent = chunkCount;
+            document.getElementById('dataReceived').textContent = 
+                (totalBytes / 1024).toFixed(2) + ' KB';
+        }
+
+        function updateStatus(text, className) {
+            statusDiv.textContent = text;
+            statusDiv.className = `status ${className}`;
+        }
+
+        async function connectListener() {
+            try {
+                connectBtn.disabled = true;
+                log('=== Connecting to Radio ===', 'info');
+
+                // Setup audio context for visualization
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                log('Audio context created', 'info');
+
+                // Connect WebSocket
+                log('Connecting to WebSocket...', 'info');
+                ws = new WebSocket('ws://localhost:9000/ws');
+
+                ws.onopen = () => {
+                    log('✓ WebSocket connected successfully', 'success');
+                    document.getElementById('wsStatus').textContent = 'Connected';
+                    updateStatus('🟢 Listening', 'listening');
+                    connectBtn.style.display = 'none';
+                    disconnectBtn.style.display = 'inline-block';
+                    visualize();
+                };
+
+                ws.onerror = (error) => {
+                    log('✗ WebSocket error: ' + error, 'error');
+                    document.getElementById('wsStatus').textContent = 'Error';
+                    connectBtn.disabled = false;
+                };
+
+                ws.onclose = () => {
+                    log('WebSocket connection closed', 'warning');
+                    document.getElementById('wsStatus').textContent = 'Closed';
+                    updateStatus('⚫ Disconnected', 'disconnected');
+                    isPlaying = false;
+                };
+
+                ws.onmessage = async (event) => {
+                    chunkCount++;
+                    log(`← Received audio chunk #${chunkCount}`, 'success');
+                    log(`  Message size: ${event.data.length} bytes`, 'info');
+
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'audio' && data.audio) {
+                            const audioData = data.audio;
+                            totalBytes += audioData.length;
+                            updateStats();
+                            
+                            log(`  Audio data size: ${audioData.length} bytes`, 'info');
+                            log(`  ✓ Playing audio chunk`, 'success');
+                            document.getElementById('audioStatus').textContent = 'Yes';
+                            
+                            // Decode base64 and play
+                            await playAudioChunk(audioData);
+                        }
+                    } catch (e) {
+                        log('✗ Error processing audio: ' + e.message, 'error');
+                        console.error(e);
+                    }
+                };
+
+            } catch (error) {
+                log('✗ Error connecting: ' + error.message, 'error');
+                console.error(error);
+                connectBtn.disabled = false;
+            }
+        }
+
+        async function playAudioChunk(base64Audio) {
+            try {
+                // Convert base64 to blob
+                const binaryString = atob(base64Audio);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'audio/webm' });
+                
+                // Create audio element and play
+                const audioUrl = URL.createObjectURL(blob);
+                const audio = new Audio(audioUrl);
+                
+                // Connect to analyser for visualization
+                const source = audioContext.createMediaElementSource(audio);
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                audio.play().catch(e => {
+                    log('  ⚠ Playback error: ' + e.message, 'warning');
+                });
+                
+                // Clean up after playing
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                };
+                
+            } catch (e) {
+                log('  ✗ Playback error: ' + e.message, 'error');
+            }
+        }
+
+        function visualize() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            requestAnimationFrame(visualize);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyser.getByteFrequencyData(dataArray);
+
+            canvasCtx.fillStyle = '#1e1e1e';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = (dataArray[i] / 255) * canvas.height;
+
+                const gradient = canvasCtx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
+                gradient.addColorStop(0, '#2196F3');
+                gradient.addColorStop(1, '#64B5F6');
+                
+                canvasCtx.fillStyle = gradient;
+                canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+                x += barWidth + 1;
+            }
+        }
+
+        function disconnect() {
+            log('=== Disconnecting ===', 'info');
+            
+            if (ws) {
+                ws.close();
+                log('WebSocket closed', 'info');
+            }
+
+            if (audioContext) {
+                audioContext.close();
+                log('Audio context closed', 'info');
+            }
+
+            document.getElementById('audioStatus').textContent = 'No';
+            log('✓ Disconnected', 'success');
+            disconnectBtn.style.display = 'none';
+            connectBtn.style.display = 'inline-block';
+            connectBtn.disabled = false;
+        }
+
+        connectBtn.addEventListener('click', connectListener);
+        disconnectBtn.addEventListener('click', disconnect);
+
+        log('Page loaded - Ready to listen', 'info');
+    </script>
+</body>
+</html>
